@@ -1,0 +1,14 @@
+# Node / React
+node_modules/
+dist/
+.build/
+.env
+
+# Uploaded files
+backend/uploads/
+uploads_tmp
+frontend/.env
+
+# Docker
+*.log
+*.env
