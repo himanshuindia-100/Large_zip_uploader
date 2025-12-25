@@ -1,5 +1,3 @@
-DELETE FROM uploads;
-DELETE FROM chunks;
 
 CREATE TABLE IF NOT EXISTS uploads (
   id TEXT PRIMARY KEY,

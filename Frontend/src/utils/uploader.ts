@@ -10,7 +10,6 @@ export async function upload(
   setSpeed: any,
   setEta: any
 ) {
-  try{
   const init = await fetch("http://localhost:4000/init", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -18,79 +17,98 @@ export async function upload(
   }).then(r => r.json());
 
   const uploaded = new Set(init.uploadedChunks ?? []);
-  const total = Math.ceil(file.size / CHUNK);
+  const totalChunks = Math.ceil(file.size / CHUNK);
 
-  // Initialize chunks
   setChunks(
-    Array.from({ length: total }).map((_, i) => ({
+    Array.from({ length: totalChunks }).map((_, i) => ({
       index: i,
       status: uploaded.has(i) ? "SUCCESS" : "PENDING"
     }))
   );
 
   let completed = uploaded.size;
-  let active = 0;
+  let pointer = 0;
   const startTime = Date.now();
 
-  const queue = [...Array(total).keys()].filter(i => !uploaded.has(i));
+  async function worker() {
+    while (true) {
+      const i = pointer++;
+      if (i >= totalChunks) return;
+      if (uploaded.has(i)) continue;
 
-  const next = async () => {
-    if (!queue.length || active >= MAX) return;
-    const i = queue.shift()!;
-    active++;
+      setChunks((prev: any[]) =>
+        prev.map(c =>
+          c.index === i ? { ...c, status: "UPLOADING" } : c
+        )
+      );
 
-    const chunk = file.slice(i * CHUNK, (i + 1) * CHUNK);
+      const chunk = file.slice(i * CHUNK, (i + 1) * CHUNK);
 
-    // Mark uploading
-    setChunks((prev: any[]) =>
-      prev.map(c => (c.index === i ? { ...c, status: "UPLOADING" } : c))
-    );
-
+      try {
+        let flag=0;
+        await retry(async () => {
     try {
-      await retry(async () => {
-        const res = await fetch("http://localhost:4000/chunk", {
-          method: "POST",
-          headers: {
-            "x-upload-id": init.uploadId,
-            "x-index": String(i),
-            "x-start": String(i * CHUNK)
-          },
-          body: chunk
-        });
-        if (!res.ok) throw new Error("Chunk upload failed");
+      const res = await fetch("http://localhost:4000/chunk", {
+        method: "POST",
+        headers: {
+          "x-upload-id": init.uploadId,
+          "x-index": String(i),
+          "x-start": String(i * CHUNK)
+        },
+        body: chunk
       });
 
-      completed++;
-
-      // Mark success
+      if (!res.ok) {
+        throw new Error("Server error");
+      }
+    } catch (err) {
+      // NETWORK FAILURE OR FETCH FAILURE
+      flag=1;
       setChunks((prev: any[]) =>
-        prev.map(c => (c.index === i ? { ...c, status: "SUCCESS" } : c))
+        prev.map(c =>
+          c.index === i ? { ...c, status: "ERROR" } : c
+        )
       );
-
-      // Update metrics
-      const elapsed = (Date.now() - startTime) / 1000;
-      const uploadedBytes = completed * CHUNK;
-      const speed = uploadedBytes / elapsed / 1024 / 1024; // MB/s
-      const eta = ((total - completed) * CHUNK) / (speed * 1024 * 1024);
-
-      setSpeed(speed.toFixed(2));
-      setEta(eta.toFixed(1));
-      setProgress(Math.floor((completed / total) * 100));
-    } catch {
-      // Mark error
-      setChunks((prev: any[]) =>
-        prev.map(c => (c.index === i ? { ...c, status: "ERROR" } : c))
-      );
-    } finally {
-      active--;
-      next();
+      throw err; 
     }
-  };
+  });
 
-  for (let j = 0; j < MAX; j++) next();
-}
-catch(err){
-  console.error("Upload failed", err);
-  alert("Upload failed: " + (err as Error).message);
-}
+        completed++;
+if(flag===0){
+        setChunks((prev: any[]) =>
+          prev.map(c =>
+            c.index === i ? { ...c, status: "SUCCESS" } : c
+          )
+        );
+      }
+        const elapsed = (Date.now() - startTime) / 1000;
+        const uploadedBytes = Math.min(
+          completed * CHUNK,
+          file.size
+        );
+
+        const speed =
+          uploadedBytes / elapsed / 1024 / 1024;
+
+        const eta =
+          speed > 0
+            ? (file.size - uploadedBytes) / (speed * 1024 * 1024)
+            : 0;
+
+        setSpeed(speed.toFixed(2));
+        setEta(eta.toFixed(1));
+        setProgress(Math.floor((uploadedBytes / file.size) * 100));
+      } catch {
+        setChunks((prev: any[]) =>
+          prev.map(c =>
+            c.index === i ? { ...c, status: "ERROR" } : c
+          )
+        );
+      }
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: MAX }).map(() => worker())
+  );
 }

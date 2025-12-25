@@ -9,7 +9,6 @@ export function FilePicker({ onPick }: FilePickerProps) {
       
       <input
         type="file"
-        
         onChange={(e) => {
           const file = e.target.files?.[0];
           if (file) onPick(file);
@@ -17,10 +16,10 @@ export function FilePicker({ onPick }: FilePickerProps) {
       />
 
       <div className="flex flex-col items-center gap-2 text-center">
-        <span className="text-sm font-medium text-gray-700">
+        <span className="text-sm font-medium text-gray-700 pr-29 pt-5">
           Click to select a ZIP file
         </span>
-        <span className="text-xs text-gray-500">
+        <span className="text-xs text-gray-500 pr-29">
           Large files supported (even up to 1GB+)
         </span>
       </div>

@@ -21,7 +21,7 @@ const handleUpload = () => {
     <>
     <div className="flex flex-col p-10">
       <FilePicker onPick={setFile}/>
-      <div className="pl-170"><button 
+      <div className="pl-160"><button 
       className="mt-4 px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50 cursor-pointer "
         onClick={handleUpload}
       ><div className="text-bold">📤 Upload</div></button></div>
